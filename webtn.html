@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Hệ thống Trắc Nghiệm - Full (1 file, per-attempt timer)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    .question-card{ transition: all .25s ease; }
+    .question-card:hover{ transform: translateY(-3px); box-shadow: 0 12px 30px rgba(2,6,23,.08); }
+    .option-label{ transition: all .12s; }
+    .option-label:hover{ background:#f1f5f9; }
+    input[type="radio"]:checked + .option-label{ background:#2563eb; color:#fff; border-color:#2563eb; }
+    .pill{ font-size:.75rem;padding:.125rem .5rem;border-radius:9999px; }
+    .table-scroll{ max-height:320px; overflow:auto; }
+    .hidden-by-default{ display:none; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-sky-50 to-indigo-100 min-h-screen">
+  <div class="container mx-auto px-4 py-8 max-w-6xl">
+    <div class="text-center mb-6">
+      <h1 class="text-4xl font-bold text-blue-800 mb-2">Hệ thống Trắc Nghiệm (1 file)</h1>
+    </div>
+
+    <!-- AUTH -->
+    <div id="auth-card" class="bg-white rounded-lg shadow p-6 mb-6">
+      <h2 class="text-2xl font-semibold mb-4">Đăng nhập / Đăng ký</h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="border rounded p-4">
+          <h3 class="font-semibold mb-3">Đăng nhập</h3>
+          <div class="space-y-3">
+            <input id="login-username" placeholder="Tên đăng nhập" class="w-full border px-3 py-2 rounded" />
+            <input id="login-password" placeholder="Mật khẩu" type="password" class="w-full border px-3 py-2 rounded" />
+            <div class="flex gap-3">
+              <button id="login-btn" class="bg-blue-600 text-white px-4 py-2 rounded">Đăng nhập</button>
+              <button id="forgot-btn" class="bg-gray-200 px-4 py-2 rounded">Quên mật khẩu</button>
+            </div>
+            <p id="login-msg" class="text-sm text-red-600"></p>
+          </div>
+        </div>
+
+        <div class="border rounded p-4">
+          <h3 class="font-semibold mb-3">Đăng ký</h3>
+          <div class="space-y-3">
+            <input id="reg-username" placeholder="Tên đăng nhập" class="w-full border px-3 py-2 rounded" />
+            <input id="reg-email" placeholder="Email" class="w-full border px-3 py-2 rounded" />
+            <input id="reg-password" placeholder="Mật khẩu" type="password" class="w-full border px-3 py-2 rounded" />
+            <input id="reg-password2" placeholder="Nhập lại mật khẩu" type="password" class="w-full border px-3 py-2 rounded" />
+            <div class="flex gap-3 items-center">
+              <label class="flex items-center gap-2"><input type="radio" name="reg-role" value="student" checked/> Học sinh</label>
+              <label class="flex items-center gap-2"><input type="radio" name="reg-role" value="teacher"/> Giáo viên</label>
+            </div>
+            <button id="register-btn" class="bg-emerald-600 text-white px-4 py-2 rounded w-full">Đăng ký</button>
+            <p id="register-msg" class="text-sm"></p>
+            <p class="text-xs text-gray-500">Nếu đăng ký Giáo viên, tài khoản sẽ chờ Admin duyệt.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Forgot -->
+    <div id="forgot-area" class="hidden bg-white rounded p-6 mb-6">
+      <h3 class="font-semibold mb-3">Quên mật khẩu — Lấy lại bằng email (OTP)</h3>
+      <div id="fp-step1" class="space-y-3">
+        <input id="fp-email" placeholder="Nhập email đã đăng ký" class="w-full border px-3 py-2 rounded" />
+        <button id="fp-send-otp" class="bg-blue-600 text-white px-4 py-2 rounded">Gửi mã OTP</button>
+        <p id="fp-msg" class="text-sm text-gray-600">Mã OTP sẽ được hiển thị (giả lập gửi mail).</p>
+      </div>
+
+      <div id="fp-step2" class="hidden-by-default mt-4 space-y-3">
+        <p class="text-sm text-gray-700">Mã OTP (hệ thống): <strong id="fp-otp-show" class="text-red-600"></strong></p>
+        <input id="fp-otp" placeholder="Nhập mã OTP" class="w-full border px-3 py-2 rounded" />
+        <input id="fp-newpass" placeholder="Mật khẩu mới" type="password" class="w-full border px-3 py-2 rounded" />
+        <input id="fp-newpass2" placeholder="Nhập lại mật khẩu mới" type="password" class="w-full border px-3 py-2 rounded" />
+        <div class="flex gap-3">
+          <button id="fp-update" class="bg-emerald-600 text-white px-4 py-2 rounded">Cập nhật mật khẩu</button>
+          <button id="fp-cancel" class="bg-gray-200 px-4 py-2 rounded">Hủy</button>
+        </div>
+        <p id="fp-update-msg" class="text-sm"></p>
+      </div>
+    </div>
+
+    <!-- Top actions -->
+    <div id="top-actions" class="hidden bg-white rounded p-4 mb-6 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div id="avatar" class="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-semibold">U</div>
+        <div>
+          <div id="top-username" class="font-semibold">username</div>
+          <div id="top-role" class="text-xs text-gray-500">role</div>
+        </div>
+      </div>
+      <div class="flex gap-3 flex-wrap">
+        <button id="btn-switch-maker" class="bg-yellow-500 text-white px-3 py-2 rounded hidden">Tạo đề</button>
+        <button id="btn-switch-taker" class="bg-blue-600 text-white px-3 py-2 rounded">Làm bài</button>
+        <button id="btn-switch-results" class="bg-gray-800 text-white px-3 py-2 rounded">Kết quả</button>
+        <button id="btn-user-mgmt" class="bg-indigo-600 text-white px-3 py-2 rounded hidden">Quản lý người dùng</button>
+        <button id="btn-quiz-mgmt" class="bg-indigo-600 text-white px-3 py-2 rounded hidden">Quản lý đề</button>
+        <button id="btn-exam-mgmt" class="bg-indigo-600 text-white px-3 py-2 rounded hidden">Quản lý kỳ thi</button>
+        <button id="btn-export-users" class="bg-amber-600 text-white px-3 py-2 rounded hidden">Xuất Users</button>
+        <button id="btn-export-quizzes" class="bg-amber-600 text-white px-3 py-2 rounded hidden">Xuất Đề</button>
+        <button id="btn-export-exams" class="bg-amber-600 text-white px-3 py-2 rounded hidden">Xuất Kỳ thi</button>
+        <button id="btn-logout" class="bg-rose-600 text-white px-3 py-2 rounded">Đăng xuất</button>
+      </div>
+    </div>
+
+    <!-- Quiz info -->
+    <div id="quiz-info" class="hidden bg-white rounded p-4 mb-6">
+      <div class="flex gap-3 items-center">
+        <span class="text-sm text-gray-700">Trạng thái đề:</span>
+        <span id="quiz-status" class="pill bg-gray-100 text-gray-700">Chưa có đề</span>
+        <div id="quiz-meta" class="text-sm text-gray-500"></div>
+      </div>
+    </div>
+
+    <!-- Maker -->
+    <div id="maker-area" class="hidden bg-white rounded p-6 mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-2xl font-semibold">Tạo / Sửa đề (Giáo viên)</h3>
+        <div class="flex gap-2">
+          <button id="maker-clear" class="px-3 py-1 rounded border">Xoá form</button>
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-4 mb-4">
+        <div class="md:col-span-2">
+          <label class="text-sm">Tiêu đề</label>
+          <input id="maker-title" class="w-full border px-3 py-2 rounded" placeholder="Tiêu đề đề thi" />
+        </div>
+        <div>
+          <label class="text-sm">Số câu</label>
+          <input id="maker-count" type="number" min="1" max="500" value="10" class="w-full border px-3 py-2 rounded" />
+        </div>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-4 mb-4">
+        <div>
+          <label class="text-sm">Ngày tạo (ghi lại)</label>
+          <input id="maker-date" type="datetime-local" class="w-full border px-3 py-2 rounded" />
+        </div>
+        <div>
+          <label class="text-sm">Thời gian làm (phút)</label>
+          <input id="maker-time" type="number" min="1" value="20" class="w-full border px-3 py-2 rounded" />
+        </div>
+        <div>
+          <label class="text-sm">Hiển thị công khai?</label>
+          <select id="maker-visible" class="w-full border px-3 py-2 rounded">
+            <option value="1">Có</option><option value="0">Không</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex gap-3 mb-4">
+        <button id="maker-generate" class="bg-amber-600 text-white px-4 py-2 rounded">Tạo khung câu hỏi</button>
+        <button id="maker-save" class="bg-emerald-600 text-white px-4 py-2 rounded">Lưu đề (sinh mã)</button>
+      </div>
+
+      <div id="maker-form" class="space-y-4"></div>
+      <p id="maker-msg" class="text-sm mt-2"></p>
+
+      <hr class="my-4"/>
+      <h4 class="font-semibold mb-2">Đề đã tạo</h4>
+      <div id="maker-list" class="space-y-2 table-scroll"></div>
+    </div>
+
+    <!-- Taker -->
+    <div id="taker-area" class="hidden bg-white rounded p-6 mb-6">
+      <h3 class="text-2xl font-semibold mb-3">Làm bài / Tham gia kỳ thi</h3>
+
+      <div id="exam-list-wrap" class="mb-4">
+        <h4 class="font-medium mb-2">Kỳ thi đang mở</h4>
+        <div id="exam-list" class="space-y-2"></div>
+        <p class="text-sm text-gray-500 mt-2">Hoặc nhập mã đề (nếu đề công khai hoặc bạn có mã).</p>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-3 items-center mb-3">
+        <input id="taker-code-input" placeholder="Nhập mã đề" class="border px-3 py-2 rounded md:col-span-2"/>
+        <div class="flex gap-2">
+          <button id="taker-start-btn" class="bg-blue-600 text-white px-4 py-2 rounded">Làm bài</button>
+          <button id="taker-preview" class="bg-gray-200 px-4 py-2 rounded">Xem thông tin</button>
+        </div>
+      </div>
+      <div id="taker-preview-info" class="text-sm text-gray-600 mb-3"></div>
+    </div>
+
+    <!-- Results -->
+    <div id="results-area" class="hidden bg-white rounded p-6 mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-2xl font-semibold">Kết quả & Lịch sử</h3>
+        <div class="flex gap-2 items-center">
+          <label class="text-sm">Lọc mã đề:</label>
+          <select id="results-filter-code" class="border px-2 py-1 rounded">
+            <option value="">Tất cả</option>
+          </select>
+          <button id="export-excel" class="bg-yellow-500 text-white px-3 py-1 rounded hidden">Xuất Excel</button>
+          <button id="close-results" class="text-sm px-3 py-1 rounded border">Đóng</button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full border rounded">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-3 py-2 text-left text-sm font-semibold">#</th>
+              <th class="px-3 py-2 text-left text-sm font-semibold">Người</th>
+              <th class="px-3 py-2 text-left text-sm font-semibold">Mã đề</th>
+              <th class="px-3 py-2 text-left text-sm font-semibold">Tiêu đề</th>
+              <th class="px-3 py-2 text-left text-sm font-semibold">Điểm</th>
+              <th class="px-3 py-2 text-left text-sm font-semibold">Đúng/Tổng</th>
+              <th class="px-3 py-2 text-left text-sm font-semibold">Thời gian</th>
+            </tr>
+          </thead>
+          <tbody id="results-tbody" class="divide-y"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Admin -->
+    <div id="admin-area" class="hidden bg-white rounded p-6 mb-6">
+      <h3 class="text-2xl font-semibold mb-4">Bảng điều khiển Admin</h3>
+      <div class="grid md:grid-cols-3 gap-4">
+        <div class="col-span-1 border rounded p-3">
+          <h4 class="font-semibold mb-2">Quản lý người dùng</h4>
+          <div id="admin-pending" class="mb-3">
+            <h5 class="text-sm font-medium">Pending (GV chờ duyệt)</h5>
+            <div id="pending-list" class="space-y-2 table-scroll"></div>
+          </div>
+          <hr/>
+          <h5 class="text-sm font-medium mt-3">Tất cả người dùng</h5>
+          <div id="all-users" class="space-y-2 table-scroll mt-2"></div>
+        </div>
+
+        <div class="col-span-1 border rounded p-3">
+          <h4 class="font-semibold mb-2">Quản lý đề</h4>
+          <div id="admin-quizzes" class="space-y-2 table-scroll"></div>
+        </div>
+
+        <div class="col-span-1 border rounded p-3">
+          <h4 class="font-semibold mb-2">Quản lý kỳ thi</h4>
+          <div class="space-y-2">
+            <label class="text-sm">Chọn mã đề</label>
+            <select id="admin-exam-quiz" class="w-full border px-2 py-1 rounded mb-2"></select>
+            <label class="text-sm">Bắt đầu</label>
+            <input id="admin-exam-start" type="datetime-local" class="w-full border px-2 py-1 rounded mb-2"/>
+            <label class="text-sm">Kết thúc</label>
+            <input id="admin-exam-end" type="datetime-local" class="w-full border px-2 py-1 rounded mb-2"/>
+            <div class="flex gap-2">
+              <button id="admin-create-exam" class="bg-emerald-600 text-white px-3 py-2 rounded">Tạo kỳ thi</button>
+              <button id="admin-refresh-data" class="bg-gray-200 px-3 py-2 rounded">Tải lại</button>
+            </div>
+          </div>
+          <hr class="my-3"/>
+          <h5 class="text-sm font-medium">Danh sách kỳ thi</h5>
+          <div id="admin-exam-list" class="table-scroll mt-2"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+/* ---------------- Storage keys ---------------- */
+const LS_USERS = "sys_users_full_v2";
+const LS_QUIZZES = "sys_quizzes_full_v2";
+const LS_EXAMS = "sys_exams_full_v2";
+const LS_CURRENT = "sys_current_full_v2";
+
+/* ---------------- Helpers ---------------- */
+const $ = q => document.querySelector(q);
+const $$ = q => Array.from(document.querySelectorAll(q));
+function getUsers(){ try{return JSON.parse(localStorage.getItem(LS_USERS))||{} }catch{return{}}}
+function setUsers(u){ localStorage.setItem(LS_USERS, JSON.stringify(u)); }
+function getQuizzes(){ try{return JSON.parse(localStorage.getItem(LS_QUIZZES))||{} }catch{return{}}}
+function setQuizzes(x){ localStorage.setItem(LS_QUIZZES, JSON.stringify(x)); }
+function getExams(){ try{return JSON.parse(localStorage.getItem(LS_EXAMS))||[] }catch{return[]}}
+function setExams(x){ localStorage.setItem(LS_EXAMS, JSON.stringify(x)); }
+function getCurrent(){ return localStorage.getItem(LS_CURRENT); }
+function setCurrent(u){ if(u) localStorage.setItem(LS_CURRENT,u); else localStorage.removeItem(LS_CURRENT); }
+function nowISO(){ return (new Date()).toISOString(); }
+function formatISO(iso){ const d=new Date(iso); if(isNaN(d.getTime())) return iso; const pad=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
+function genCode(len=6){ const chars="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"; let s=""; for(let i=0;i<len;i++) s+=chars[Math.floor(Math.random()*chars.length)]; return s; }
+function escapeHtml(s){ return (s||"").toString().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+/* ---------------- Ensure default admin ---------------- */
+(function ensureAdmin(){
+  const users = getUsers();
+  if(!users["admin"]){
+    users["admin"] = { password: "123456789", email: "admin@example.com", role: "admin", status: "approved", createdAt: nowISO(), history: [] };
+    setUsers(users);
+  }
+})();
+
+/* ---------------- DOM refs ---------------- */
+const authCard = $("#auth-card"), forgotArea = $("#forgot-area"), topActions = $("#top-actions"), avatar = $("#avatar"), topUsername = $("#top-username"), topRole = $("#top-role");
+const btnSwitchMaker = $("#btn-switch-maker"), btnSwitchTaker = $("#btn-switch-taker"), btnSwitchResults = $("#btn-switch-results"), btnUserMgmt = $("#btn-user-mgmt"), btnQuizMgmt = $("#btn-quiz-mgmt"), btnExamMgmt = $("#btn-exam-mgmt");
+const btnLogout = $("#btn-logout"), btnExportUsers = $("#btn-export-users"), btnExportQuizzes = $("#btn-export-quizzes"), btnExportExams = $("#btn-export-exams");
+const quizInfo = $("#quiz-info"), quizStatus = $("#quiz-status"), quizMeta = $("#quiz-meta");
+
+/* auth inputs */
+const loginUsername = $("#login-username"), loginPassword = $("#login-password"), loginBtn = $("#login-btn"), forgotBtn = $("#forgot-btn"), loginMsg = $("#login-msg");
+const regUsername = $("#reg-username"), regEmail = $("#reg-email"), regPassword = $("#reg-password"), regPassword2 = $("#reg-password2"), registerBtn = $("#register-btn"), registerMsg = $("#register-msg");
+
+/* forgot */
+const fpEmail = $("#fp-email"), fpSendOtpBtn = $("#fp-send-otp"), fpOtpShow = $("#fp-otp-show"), fpStep2 = $("#fp-step2"), fpOtp = $("#fp-otp"), fpNewpass = $("#fp-newpass"), fpNewpass2 = $("#fp-newpass2"), fpUpdate = $("#fp-update"), fpCancel = $("#fp-cancel"), fpMsg = $("#fp-msg"), fpUpdateMsg = $("#fp-update-msg");
+
+/* maker */
+const makerArea = $("#maker-area"), makerTitle = $("#maker-title"), makerCount = $("#maker-count"), makerDate = $("#maker-date"), makerTime = $("#maker-time"), makerVisible = $("#maker-visible");
+const makerGenerate = $("#maker-generate"), makerSave = $("#maker-save"), makerForm = $("#maker-form"), makerMsg = $("#maker-msg"), makerList = $("#maker-list"), makerClear = $("#maker-clear");
+
+/* taker */
+const takerArea = $("#taker-area"), examList = $("#exam-list"), takerCodeInput = $("#taker-code-input"), takerStartBtn = $("#taker-start-btn"), takerPreview = $("#taker-preview"), takerPreviewInfo = $("#taker-preview-info");
+
+/* results */
+const resultsArea = $("#results-area"), resultsFilterCode = $("#results-filter-code"), resultsTbody = $("#results-tbody"), exportExcelBtn = $("#export-excel"), closeResults = $("#close-results");
+
+/* admin */
+const adminArea = $("#admin-area"), pendingList = $("#pending-list"), allUsersEl = $("#all-users"), adminQuizzes = $("#admin-quizzes"), adminExamQuiz = $("#admin-exam-quiz"), adminExamStart = $("#admin-exam-start"), adminExamEnd = $("#admin-exam-end"), adminCreateExam = $("#admin-create-exam"), adminExamList = $("#admin-exam-list"), adminRefresh = $("#admin-refresh-data");
+
+/* OTP store (in-memory) */
+const OTP_STORE = {}; // email -> otp
+
+/* ---------------- UI helpers ---------------- */
+function hideAllMain(){
+  $("#maker-area")?.classList.add("hidden");
+  $("#taker-area")?.classList.add("hidden");
+  $("#results-area")?.classList.add("hidden");
+  $("#admin-area")?.classList.add("hidden");
+  authCard.classList.add("hidden");
+  forgotArea.classList.add("hidden");
+}
+function showAuth(){ hideAllMain(); authCard.classList.remove("hidden"); }
+function showForgot(){ hideAllMain(); forgotArea.classList.remove("hidden"); }
+function updateQuizInfoUI(){
+  const quizzes = getQuizzes();
+  const keys = Object.keys(quizzes);
+  if(keys.length === 0){ quizStatus.textContent = "Chưa có đề"; quizStatus.className = "pill bg-gray-100 text-gray-700"; quizMeta.textContent = ""; }
+  else {
+    quizStatus.textContent = "Đã có đề"; quizStatus.className = "pill bg-emerald-100 text-emerald-700";
+    const last = keys.map(c=>quizzes[c]).sort((a,b)=> new Date(b.createdAt)- new Date(a.createdAt))[0];
+    quizMeta.textContent = ` • "${last.title}" • ${last.questions.length} câu • Tạo: ${last.createdBy} • ${formatISO(last.createdAt)}`;
+  }
+  renderMakerList();
+  populateAdminQuizSelects();
+  populateResultsFilter();
+  renderExamList();
+}
+
+/* ---------------- Auth flows ---------------- */
+registerBtn.addEventListener("click", ()=>{
+  const u = regUsername.value.trim();
+  const email = regEmail.value.trim().toLowerCase();
+  const p = regPassword.value, p2 = regPassword2.value;
+  const role = document.querySelector('input[name="reg-role"]:checked')?.value || "student";
+  registerMsg.textContent = "";
+  if(!u||!email||!p||!p2){ registerMsg.textContent="Vui lòng nhập đầy đủ."; registerMsg.className="text-sm text-red-600"; return; }
+  if(p!==p2){ registerMsg.textContent="Mật khẩu không khớp."; registerMsg.className="text-sm text-red-600"; return; }
+  const users = getUsers();
+  if(users[u]){ registerMsg.textContent="Tên đăng nhập đã tồn tại."; registerMsg.className="text-sm text-red-600"; return; }
+  const status = (role==="teacher") ? "pending" : "approved";
+  users[u] = { password:p, email, role, status, createdAt: nowISO(), history: [] };
+  setUsers(users);
+  registerMsg.textContent = (role==="teacher")? "Đăng ký thành công! Giáo viên chờ Admin duyệt." : "Đăng ký thành công! Bạn có thể đăng nhập.";
+  registerMsg.className = "text-sm text-emerald-600";
+  $("#login-username").value = u;
+});
+
+loginBtn.addEventListener("click", ()=>{
+  loginMsg.textContent = "";
+  const u = loginUsername.value.trim(), p = loginPassword.value;
+  if(!u||!p){ loginMsg.textContent = "Nhập đầy đủ."; return; }
+  const users = getUsers();
+  if(!users[u] || users[u].password !== p){ loginMsg.textContent = "Sai tên hoặc mật khẩu."; return; }
+  if(users[u].role === "teacher" && users[u].status !== "approved"){ loginMsg.textContent = "Tài khoản giáo viên đang chờ admin duyệt."; return; }
+  setCurrent(u);
+  showAppFor(u);
+});
+
+/* ---------------- Forgot password ---------------- */
+forgotBtn.addEventListener("click", showForgot);
+fpSendOtpBtn.addEventListener("click", ()=>{
+  const email = fpEmail.value.trim().toLowerCase();
+  fpMsg.textContent = "";
+  if(!email){ fpMsg.textContent="Nhập email."; return; }
+  const users = getUsers();
+  const found = Object.keys(users).find(u=>users[u].email === email);
+  if(!found){ fpMsg.textContent = "Email không tồn tại."; return; }
+  const otp = String(Math.floor(100000 + Math.random()*900000));
+  OTP_STORE[email] = otp;
+  fpOtpShow.textContent = otp; // giả lập gửi mail — hiển thị
+  fpStep2.classList.remove("hidden-by-default");
+  fpMsg.textContent = "Mã OTP đã sinh (hiển thị); nhập mã để đổi mật khẩu.";
+});
+fpCancel.addEventListener("click", ()=>{ fpStep2.classList.add("hidden-by-default"); fpUpdateMsg.textContent=""; fpMsg.textContent=""; fpEmail.value=""; });
+fpUpdate.addEventListener("click", ()=>{
+  const email = fpEmail.value.trim().toLowerCase();
+  const otp = fpOtp.value.trim();
+  const np = fpNewpass.value, np2 = fpNewpass2.value;
+  if(!email||!otp||!np||!np2){ fpUpdateMsg.textContent="Nhập đủ thông tin."; fpUpdateMsg.className="text-sm text-red-600"; return; }
+  if(np!==np2){ fpUpdateMsg.textContent="Mật khẩu mới không khớp."; fpUpdateMsg.className="text-sm text-red-600"; return; }
+  if(!OTP_STORE[email] || OTP_STORE[email] !== otp){ fpUpdateMsg.textContent="OTP không đúng."; fpUpdateMsg.className="text-sm text-red-600"; return; }
+  const users = getUsers();
+  const uname = Object.keys(users).find(u=>users[u].email === email);
+  if(!uname){ fpUpdateMsg.textContent="Không tìm thấy user."; fpUpdateMsg.className="text-sm text-red-600"; return; }
+  users[uname].password = np;
+  setUsers(users);
+  delete OTP_STORE[email];
+  fpUpdateMsg.textContent = "Đã cập nhật mật khẩu.";
+  fpUpdateMsg.className="text-sm text-emerald-600";
+});
+
+/* ---------------- Maker (teacher/admin) ---------------- */
+function buildMakerForm(n, existing=null){
+  makerForm.innerHTML = "";
+  for(let i=1;i<=n;i++){
+    const data = existing ? existing[i-1] : {q:"",A:"",B:"",C:"",D:"",correct:"A"};
+    const block = document.createElement("div");
+    block.className = "question-card border rounded p-3 bg-white";
+    block.innerHTML = `
+      <div class="flex justify-between items-center mb-2">
+        <div class="font-medium">Câu ${i}</div>
+        <div class="text-xs">Đ/S đúng:
+          <select name="correct_${i}" class="border px-2 py-1 rounded ml-2">
+            <option value="A"${data.correct==="A"?" selected":""}>A</option>
+            <option value="B"${data.correct==="B"?" selected":""}>B</option>
+            <option value="C"${data.correct==="C"?" selected":""}>C</option>
+            <option value="D"${data.correct==="D"?" selected":""}>D</option>
+          </select>
+        </div>
+      </div>
+      <input name="q_${i}" class="w-full border px-2 py-2 rounded mb-2" placeholder="Nội dung câu" value="${escapeHtml(data.q)}"/>
+      <div class="grid md:grid-cols-2 gap-2">
+        <input name="A_${i}" class="border px-2 py-2 rounded" placeholder="A" value="${escapeHtml(data.A)}"/>
+        <input name="B_${i}" class="border px-2 py-2 rounded" placeholder="B" value="${escapeHtml(data.B)}"/>
+        <input name="C_${i}" class="border px-2 py-2 rounded" placeholder="C" value="${escapeHtml(data.C)}"/>
+        <input name="D_${i}" class="border px-2 py-2 rounded" placeholder="D" value="${escapeHtml(data.D)}"/>
+      </div>
+    `;
+    makerForm.appendChild(block);
+  }
+}
+
+makerGenerate.addEventListener("click", ()=>{
+  const n = parseInt(makerCount.value||"0",10);
+  if(!n || n<1 || n>500){ makerMsg.textContent = "Số câu (1–500)"; makerMsg.className="text-sm text-red-600"; return; }
+  buildMakerForm(n);
+  makerMsg.textContent = `Khung cho ${n} câu đã tạo. Nhập nội dung & đáp án rồi Lưu đề.`;
+  makerMsg.className = "text-sm text-gray-600";
+});
+
+makerSave.addEventListener("click", ()=>{
+  const title = makerTitle.value.trim() || "Bài trắc nghiệm";
+  const n = parseInt(makerCount.value||"0",10);
+  if(!n){ makerMsg.textContent="Số câu không hợp lệ."; makerMsg.className="text-sm text-red-600"; return; }
+  const questions = [];
+  for(let i=1;i<=n;i++){
+    const q = makerForm.querySelector(`[name="q_${i}"]`)?.value.trim();
+    const A = makerForm.querySelector(`[name="A_${i}"]`)?.value.trim();
+    const B = makerForm.querySelector(`[name="B_${i}"]`)?.value.trim();
+    const C = makerForm.querySelector(`[name="C_${i}"]`)?.value.trim();
+    const D = makerForm.querySelector(`[name="D_${i}"]`)?.value.trim();
+    const correct = makerForm.querySelector(`[name="correct_${i}"]`)?.value || "A";
+    if(!q||!A||!B||!C||!D){ makerMsg.textContent=`Thiếu dữ liệu ở câu ${i}`; makerMsg.className="text-sm text-red-600"; return; }
+    questions.push({ q, A, B, C, D, correct });
+  }
+  let code = genCode(6);
+  const quizzes = getQuizzes();
+  while(quizzes[code]) code = genCode(6);
+  const cur = getCurrent();
+  const createdAt = makerDate.value ? new Date(makerDate.value).toISOString() : nowISO();
+  const timeMin = parseInt(makerTime.value||"20",10) || 20;
+  const visible = makerVisible.value === "1";
+  quizzes[code] = { code, title, createdBy: cur, createdAt, timeMin, visible, questions };
+  setQuizzes(quizzes);
+  makerMsg.textContent = `Đã lưu đề. Mã đề: ${code}`;
+  makerMsg.className = "text-sm text-emerald-600";
+  makerForm.innerHTML = "";
+  makerTitle.value = "";
+  updateQuizInfoUI();
+});
+
+makerClear.addEventListener("click", ()=>{ makerForm.innerHTML=""; makerMsg.textContent="Form đã xoá."; makerMsg.className="text-sm text-gray-600"; });
+
+function renderMakerList(){
+  const quizzes = getQuizzes();
+  const keys = Object.keys(quizzes).sort((a,b)=> new Date(quizzes[b].createdAt)- new Date(quizzes[a].createdAt));
+  makerList.innerHTML = keys.map(c=>{
+    const q = quizzes[c];
+    return `
+      <div class="border rounded p-2 flex items-center justify-between">
+        <div>
+          <div class="font-medium">${escapeHtml(q.title)}</div>
+          <div class="text-xs text-gray-500">Mã: <strong>${c}</strong> • ${q.questions.length} câu • ${q.timeMin} phút • Tạo: ${q.createdBy} • ${formatISO(q.createdAt)}</div>
+        </div>
+        <div class="flex gap-2">
+          <button data-code="${c}" class="open-quiz-btn px-3 py-1 rounded border text-sm">Xem</button>
+          <button data-code="${c}" class="del-quiz-btn px-3 py-1 rounded border text-sm text-red-600">Xoá</button>
+        </div>
+      </div>
+    `;
+  }).join("") || `<div class="text-sm text-gray-500">Chưa có đề.</div>`;
+  $$(".open-quiz-btn").forEach(b=> b.addEventListener("click", e=>{
+    const code = e.currentTarget.dataset.code;
+    // open view page (hash)
+    window.location.hash = `#viewQuiz:${code}`;
+    location.reload();
+  }));
+  $$(".del-quiz-btn").forEach(b=> b.addEventListener("click", e=>{
+    const code = e.currentTarget.dataset.code;
+    if(!confirm(`Xoá đề ${code}?`)) return;
+    const quizzes = getQuizzes();
+    delete quizzes[code];
+    setQuizzes(quizzes);
+    updateQuizInfoUI();
+  }));
+}
+
+/* ---------------- Exams (admin creates) ---------------- */
+function populateAdminQuizSelects(){
+  const quizzes = getQuizzes();
+  const keys = Object.keys(quizzes);
+  adminExamQuiz.innerHTML = `<option value="">Chọn mã đề</option>` + keys.map(k=>`<option value="${k}">${k} — ${escapeHtml(quizzes[k].title)}</option>`).join("");
+}
+
+$("#admin-create-exam").addEventListener("click", ()=>{
+  const code = adminExamQuiz.value;
+  const start = adminExamStart.value;
+  const end = adminExamEnd.value;
+  if(!code || !start || !end){ alert("Chọn mã đề, ngày bắt đầu và ngày kết thúc."); return; }
+  if(new Date(start) >= new Date(end)){ alert("Ngày kết thúc phải lớn hơn ngày bắt đầu."); return; }
+  const ex = { id: "ex_"+Date.now()+"_"+Math.floor(Math.random()*1000), quizCode: code, startISO: new Date(start).toISOString(), endISO: new Date(end).toISOString(), createdBy: getCurrent(), createdAt: nowISO() };
+  const exams = getExams();
+  exams.push(ex); setExams(exams);
+  alert("Đã tạo kỳ thi.");
+  renderAdminAll();
+  renderExamList();
+});
+
+$("#admin-refresh-data").addEventListener("click", ()=> renderAdminAll());
+
+function renderAdminAll(){
+  const users = getUsers();
+  const quizzes = getQuizzes();
+  const exams = getExams();
+  // pending teachers
+  const pending = Object.keys(users).filter(u=>users[u].role==="teacher" && users[u].status==="pending");
+  pendingList.innerHTML = pending.map(u=>{
+    const info = users[u];
+    return `<div class="border rounded p-2 flex items-center justify-between">
+      <div><div class="font-medium">${escapeHtml(u)}</div><div class="text-xs text-gray-500">Email: ${escapeHtml(info.email)} • ĐK: ${formatISO(info.createdAt)}</div></div>
+      <div class="flex gap-2"><button data-u="${u}" class="approve-btn px-2 py-1 rounded bg-emerald-600 text-white text-sm">Duyệt</button><button data-u="${u}" class="reject-btn px-2 py-1 rounded border text-sm text-red-600">Từ chối</button></div>
+    </div>`; }).join("") || `<div class="text-sm text-gray-500">Không có tài khoản pending.</div>`;
+  $$(".approve-btn").forEach(b=> b.addEventListener("click", e=>{ const u=e.currentTarget.dataset.u; const users=getUsers(); users[u].status="approved"; setUsers(users); renderAdminAll(); }));
+  $$(".reject-btn").forEach(b=> b.addEventListener("click", e=>{ const u=e.currentTarget.dataset.u; if(confirm("Từ chối & xóa?")){ const users=getUsers(); delete users[u]; setUsers(users); renderAdminAll(); }}));
+
+  // all users
+  allUsersEl.innerHTML = Object.keys(users).map(u=>{
+    const info = users[u];
+    return `<div class="border rounded p-2 flex items-center justify-between">
+      <div><div class="font-medium">${escapeHtml(u)}</div><div class="text-xs text-gray-500">Email: ${escapeHtml(info.email)} • Pass: ${escapeHtml(info.password)} • Role: ${escapeHtml(info.role)} • Status: ${escapeHtml(info.status)}</div></div>
+      <div class="flex gap-2"><button data-u="${u}" class="view-hist-btn px-2 py-1 rounded border text-sm">Lịch sử</button><button data-u="${u}" class="del-user-btn px-2 py-1 rounded border text-sm text-red-600">Xoá</button></div>
+    </div>`; }).join("") || `<div class="text-sm text-gray-500">Không có user nào.</div>`;
+  $$(".del-user-btn").forEach(b=> b.addEventListener("click", e=>{ const u=e.currentTarget.dataset.u; if(confirm(`Xoá ${u}?`)){ const users=getUsers(); delete users[u]; setUsers(users); renderAdminAll(); }}));
+  $$(".view-hist-btn").forEach(b=> b.addEventListener("click", e=>{ const u=e.currentTarget.dataset.u; const users=getUsers(); const hist = users[u].history||[]; if(!hist.length) return alert("Không có lịch sử."); alert(`Lịch sử ${u}:\n` + hist.map(h=>`${formatISO(h.time)} — ${h.code} — ${h.title} — ${h.score}% (${h.correct}/${h.total})`).join("\n")); }));
+
+  // quizzes
+  adminQuizzes.innerHTML = Object.keys(quizzes).map(c=>{
+    const q = quizzes[c];
+    return `<div class="border rounded p-2 flex items-center justify-between">
+      <div><div class="font-medium">${escapeHtml(q.title)}</div><div class="text-xs text-gray-500">Mã: ${c} • ${q.questions.length} câu • ${q.timeMin} phút • Tạo: ${q.createdBy} • ${formatISO(q.createdAt)}</div></div>
+      <div class="flex gap-2"><button data-code="${c}" class="admin-view-quiz px-2 py-1 rounded border text-sm">Xem</button><button data-code="${c}" class="admin-del-quiz px-2 py-1 rounded border text-sm text-red-600">Xoá</button></div>
+    </div>`;
+  }).join("") || `<div class="text-sm text-gray-500">Chưa có đề.</div>`;
+  $$(".admin-del-quiz").forEach(b=> b.addEventListener("click", e=>{ const code=e.currentTarget.dataset.code; if(confirm(`Xoá đề ${code}?`)){ const quizzes=getQuizzes(); delete quizzes[code]; setQuizzes(quizzes); renderAdminAll(); updateQuizInfoUI(); }}));
+  $$(".admin-view-quiz").forEach(b=> b.addEventListener("click", e=>{
+    const code = e.currentTarget.dataset.code;
+    // open viewQuiz page
+    window.location.hash = `#viewQuiz:${code}`;
+    location.reload();
+  }));
+
+  // exams list
+  const examsSorted = getExams().sort((a,b)=> new Date(b.createdAt)- new Date(a.createdAt));
+  adminExamList.innerHTML = examsSorted.map(ex=>{
+    return `<div class="border rounded p-2 flex items-center justify-between">
+      <div><div class="font-medium">${escapeHtml(ex.quizCode)} — ${escapeHtml(getQuizzes()[ex.quizCode]?.title||"")}</div><div class="text-xs text-gray-500">Bắt đầu: ${formatISO(ex.startISO)} • Kết thúc: ${formatISO(ex.endISO)} • Tạo: ${ex.createdBy}</div></div>
+      <div class="flex gap-2"><button data-id="${ex.id}" class="del-exam-btn px-2 py-1 rounded border text-sm text-red-600">Xoá</button><button data-id="${ex.id}" data-code="${ex.quizCode}" class="view-exam-btn px-2 py-1 rounded border text-sm">Xem</button></div>
+    </div>`;
+  }).join("") || `<div class="text-sm text-gray-500">Chưa có kỳ thi.</div>`;
+  $$(".del-exam-btn").forEach(b=> b.addEventListener("click", e=>{ const id=e.currentTarget.dataset.id; if(confirm("Xoá kỳ thi?")){ let exs=getExams(); exs = exs.filter(x=> x.id !== id); setExams(exs); renderAdminAll(); renderExamList(); }}));
+  $$(".view-exam-btn").forEach(b=> b.addEventListener("click", e=>{
+    const id = e.currentTarget.dataset.id;
+    window.location.hash = `#viewExam:${id}`;
+    location.reload();
+  }));
+}
+
+/* ---------------- Render Exam List for taker ---------------- */
+function renderExamList(){
+  const exams = getExams();
+  const quizzes = getQuizzes();
+  const now = new Date();
+  const active = exams.filter(ex=>{
+    const s = new Date(ex.startISO), e = new Date(ex.endISO);
+    return now >= s && now <= e;
+  }).sort((a,b)=> new Date(a.startISO)-new Date(b.startISO));
+  examList.innerHTML = active.map(ex=>{
+    const q = quizzes[ex.quizCode];
+    return `<div class="border rounded p-2 flex items-center justify-between">
+      <div><div class="font-medium">${escapeHtml(q?.title||"Đề không tồn tại")}</div><div class="text-xs text-gray-500">Mã: <strong>${ex.quizCode}</strong> • Bắt đầu: ${formatISO(ex.startISO)} • Kết thúc: ${formatISO(ex.endISO)}</div></div>
+      <div class="flex gap-2"><button data-code="${ex.quizCode}" data-exid="${ex.id}" class="exam-preview-btn px-3 py-1 rounded border text-sm">Xem & Làm bài</button></div>
+    </div>`;
+  }).join("") || `<div class="text-sm text-gray-500">Hiện không có kỳ thi đang mở.</div>`;
+  $$(".exam-preview-btn").forEach(b=> b.addEventListener("click", e=>{ takerCodeInput.value = e.currentTarget.dataset.code; takerPreview.click(); }));
+}
+
+takerPreview.addEventListener("click", ()=>{
+  const code = takerCodeInput.value.trim().toUpperCase();
+  if(!code){ takerPreviewInfo.textContent = "Nhập mã đề."; return; }
+  const quizzes = getQuizzes(); const q = quizzes[code];
+  if(!q){ takerPreviewInfo.textContent = "Mã đề không tồn tại."; return; }
+  const ex = findActiveExamFor(code);
+  const cur = getCurrent(); const users = getUsers(); const role = cur ? users[cur].role : null;
+  let allowed = false;
+  if(ex) allowed = true;
+  if(q.visible) allowed = true;
+  if(role === "teacher" || role === "admin") allowed = true;
+  takerPreviewInfo.innerHTML = `Tiêu đề: <strong>${escapeHtml(q.title)}</strong> • ${q.questions.length} câu • ${q.timeMin} phút • Tạo: ${escapeHtml(q.createdBy)}<br>
+    ${ex? `<span class="text-sm text-green-600">Kỳ thi: ${formatISO(ex.startISO)} → ${formatISO(ex.endISO)}</span>` : `<span class="text-sm text-gray-500">Không có kỳ thi (đề công khai: ${q.visible?"Có":"Không"})</span>`}
+    <div class="mt-2"><button id="do-now" class="bg-blue-600 text-white px-3 py-1 rounded">Làm bài (mở trang mới)</button></div>`;
+  setTimeout(()=>{ const doNow = $("#do-now"); if(doNow) doNow.addEventListener("click", ()=>{
+    if(!allowed){ alert("Bạn chưa được phép làm đề này (không công khai và không có kỳ thi)."); return; }
+    const exid = ex ? ex.id : "";
+    window.open(location.href.split('#')[0] + `#take:${code}:${exid}`, "_blank");
+  }); },50);
+});
+
+/* find active exam for code */
+function findActiveExamFor(code){
+  const exs = getExams();
+  const now = new Date();
+  return exs.find(ex=> ex.quizCode === code && now >= new Date(ex.startISO) && now <= new Date(ex.endISO));
+}
+
+/* ---------------- Taking quiz in new page/tab (hash-based) ---------------- */
+function bootTakeFromHash(){
+  const hash = location.hash || "";
+  if(!hash.startsWith("#take:")) return false;
+  const parts = hash.replace("#take:","").split(":");
+  const code = parts[0];
+  const exid = parts[1] || "";
+  startStandaloneTake(code, exid);
+  return true;
+}
+
+/* Start standalone take page: per-attempt timer behavior implemented here */
+function startStandaloneTake(code, exid){
+  // clear body and render standalone page
+  document.body.innerHTML = ""; // show only exam
+  const quizzes = getQuizzes();
+  const q = quizzes[code];
+  if(!q){
+    document.write(`<div style="font-family:Arial;padding:20px"><h2>Không tìm thấy mã đề: ${escapeHtml(code)}</h2></div>`);
+    return;
+  }
+  // find exam instance (if any)
+  const exams = getExams();
+  const ex = exid ? exams.find(x=> x.id === exid) : findActiveExamFor(code);
+  const now = new Date();
+  if(ex){
+    if(now < new Date(ex.startISO)){ document.write(`<div style="font-family:Arial;padding:20px"><h2>Chưa đến thời gian làm bài</h2><p>Bắt đầu: ${formatISO(ex.startISO)}</p></div>`); return; }
+    if(now > new Date(ex.endISO)){ document.write(`<div style="font-family:Arial;padding:20px"><h2>Kỳ thi đã kết thúc</h2><p>Kết thúc: ${formatISO(ex.endISO)}</p></div>`); return; }
+  } else {
+    if(!q.visible){
+      document.write(`<div style="font-family:Arial;padding:20px"><h2>Đề không công khai và không có kỳ thi</h2></div>`); return;
+    }
+  }
+
+  // Compute per-attempt seconds:
+  // candidate1 = quiz.timeMin * 60
+  // candidate2 = if ex exists then remaining seconds of exam window
+  let attemptSeconds = q.timeMin * 60;
+  if(ex){
+    const remaining = Math.floor((new Date(ex.endISO) - new Date())/1000);
+    if(remaining <= 0){
+      document.write(`<div style="font-family:Arial;padding:20px"><h2>Kỳ thi đã kết thúc</h2><p>Kết thúc: ${formatISO(ex.endISO)}</p></div>`); return;
+    }
+    // the allowed attempt seconds is min(attemptSeconds, remaining)
+    if(remaining < attemptSeconds) attemptSeconds = remaining;
+  }
+
+  // Build page: show exam window and attempt duration
+  const title = escapeHtml(q.title);
+  const startWindowText = ex ? formatISO(ex.startISO) : "—";
+  const endWindowText = ex ? formatISO(ex.endISO) : "—";
+  const attemptMinutes = Math.floor(attemptSeconds/60);
+  const attemptExtraSeconds = attemptSeconds % 60;
+
+  const html = `
+    <div style="font-family:Inter, Arial;max-width:980px;margin:18px auto;padding:22px;background:#fff;border-radius:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h1 style="font-size:20px;margin:0">${title}</h1>
+          <div style="color:#555;font-size:13px;margin-top:6px">Mã đề: <strong>${q.code}</strong> • ${q.questions.length} câu • Thời lượng: ${q.timeMin} phút</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:12px;color:#555">Khoảng mở thi</div>
+          <div style="font-weight:600">${startWindowText} → ${endWindowText}</div>
+          <div style="font-size:12px;color:#555;margin-top:6px">Thời lượng cá nhân</div>
+          <div id="countdown" style="font-family:monospace;font-size:20px;color:#b91c1c;margin-top:6px">${String(Math.floor(attemptSeconds/60)).padStart(2,'0')}:${String(attemptSeconds%60).padStart(2,'0')}</div>
+        </div>
+      </div>
+      <hr style="margin:12px 0; border-color:#eee"/>
+      <form id="take-form"></form>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button id="submit-btn" style="background:#16a34a;color:white;border:none;padding:8px 12px;border-radius:6px">Nộp bài</button>
+        <button id="reset-btn" style="background:#eee;border:none;padding:8px 12px;border-radius:6px">Làm lại</button>
+        <button id="exit-btn" style="background:#ef4444;color:white;border:none;padding:8px 12px;border-radius:6px">Thoát</button>
+      </div>
+      <div id="result" style="margin-top:12px;display:none"></div>
+    </div>
+    <script>
+      const quiz = ${JSON.stringify(q)};
+      const attemptSecondsInitial = ${attemptSeconds};
+      const total = quiz.questions.length;
+      const form = document.getElementById('take-form');
+      quiz.questions.forEach((it, idx)=>{
+        const i = idx+1;
+        const div = document.createElement('div');
+        div.style = 'padding:8px;border:1px solid #f0f0f0;border-radius:8px;margin-bottom:8px';
+        div.innerHTML = '<div style="font-weight:600;margin-bottom:6px">'+i+'. '+ (it.q) +'</div>';
+        const opts = ["A","B","C","D"].map(L => '<label style="display:block;margin-bottom:6px"><input type="radio" name="q'+i+'" value="'+L+'"/> <span style="padding:6px;border-radius:6px">'+L+'. '+ (it[L]) +'</span></label>');
+        div.innerHTML += opts.join('');
+        form.appendChild(div);
+      });
+      const cd = document.getElementById('countdown');
+      let secondsLeft = attemptSecondsInitial;
+      function updateCD(){ const h = Math.floor(secondsLeft/3600); const m = Math.floor((secondsLeft%3600)/60); const s = secondsLeft%60; cd.textContent = (h>0?String(h).padStart(2,'0')+':':'') + String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'); if(secondsLeft<=0){ clearInterval(timer); autoSubmit(); } }
+      updateCD();
+      const timer = setInterval(()=>{ secondsLeft--; updateCD(); },1000);
+      function getSelections(){
+        const ans={}; for(let i=1;i<=total;i++){ const sel = document.querySelector('input[name=q'+i+']:checked'); ans[i]= sel? sel.value : null; } return ans;
+      }
+      function scoreAndSave(auto=false){
+        const sel = getSelections();
+        let correct = 0; const mistakes=[];
+        for(let i=1;i<=total;i++){ const chosen = sel[i]; const key=quiz.questions[i-1].correct; if(chosen===key) correct++; else mistakes.push({no:i,chosen:chosen||'—',correct:key}); }
+        const percent = Math.round((correct/total)*100);
+        // save to localStorage history
+        try{
+          const LS_USERS = '${LS_USERS}'; const LS_CURRENT = '${LS_CURRENT}'; const cur = localStorage.getItem(LS_CURRENT);
+          if(cur){
+            const users = JSON.parse(localStorage.getItem(LS_USERS)||'{}');
+            users[cur] = users[cur] || {}; users[cur].history = users[cur].history || [];
+            users[cur].history.unshift({ time: new Date().toISOString(), code: quiz.code, title: quiz.title, score: percent, correct, total });
+            localStorage.setItem(LS_USERS, JSON.stringify(users));
+          }
+        }catch(e){ console.warn('save history failed',e); }
+        const resultDiv = document.getElementById('result'); resultDiv.style.display='block';
+        resultDiv.innerHTML = '<div style="font-weight:600">Kết quả: '+correct+'/'+total+' ('+percent+'%)' +(auto? ' — (Tự nộp do hết giờ)':'')+ '</div>' + (mistakes.length? '<ul style="margin-top:8px">'+ mistakes.map(m=>'<li>Câu '+m.no+': bạn chọn '+m.chosen+', đúng: '+m.correct+'</li>').join('')+'</ul>':'');
+        clearInterval(timer);
+      }
+      function autoSubmit(){ alert('Hết giờ, nộp tự động'); scoreAndSave(true); }
+      document.getElementById('submit-btn').addEventListener('click', ()=>{ if(confirm('Bạn chắc chắn nộp?')) scoreAndSave(false); });
+      document.getElementById('reset-btn').addEventListener('click', ()=>{ for(let i=1;i<=total;i++){ const c=document.querySelector('input[name=q'+i+']:checked'); if(c) c.checked=false; } });
+      document.getElementById('exit-btn').addEventListener('click', ()=>{ if(confirm('Thoát mà không nộp?')) window.close(); });
+    <\/script>
+  `;
+  document.write(html);
+}
+
+/* ---------------- Results page & export ---------------- */
+function populateResultsFilter(){
+  const quizzes = getQuizzes();
+  const keys = Object.keys(quizzes);
+  resultsFilterCode.innerHTML = `<option value="">Tất cả</option>` + keys.map(c=>`<option value="${c}">${c} — ${escapeHtml(quizzes[c].title)}</option>`).join("");
+}
+function renderResults(){
+  const users = getUsers(); const quizzes = getQuizzes(); const cur = getCurrent(); const me = users[cur];
+  const allowExport = me && (me.role === "admin" || me.role === "teacher");
+  exportExcelBtn.style.display = allowExport ? "inline-block" : "none";
+  const filter = resultsFilterCode.value;
+  const rows = [];
+  Object.keys(users).forEach(u=>{
+    const hist = users[u].history || [];
+    hist.forEach(h=>{
+      if(filter && h.code !== filter) return;
+      if(me && me.role === "teacher"){ const q = quizzes[h.code]; if(!q || q.createdBy !== cur) return; }
+      rows.push({ user: u, code: h.code, title: h.title, score: h.score, correct: h.correct, total: h.total, time: h.time });
+    });
+  });
+  rows.sort((a,b)=> new Date(b.time) - new Date(a.time));
+  resultsTbody.innerHTML = rows.map((r, idx)=>`
+    <tr>
+      <td class="px-3 py-2 text-sm">${idx+1}</td>
+      <td class="px-3 py-2 text-sm">${escapeHtml(r.user)}</td>
+      <td class="px-3 py-2 text-sm">${escapeHtml(r.code)}</td>
+      <td class="px-3 py-2 text-sm">${escapeHtml(r.title)}</td>
+      <td class="px-3 py-2 text-sm">${r.score}%</td>
+      <td class="px-3 py-2 text-sm">${r.correct}/${r.total}</td>
+      <td class="px-3 py-2 text-sm">${formatISO(r.time)}</td>
+    </tr>
+  `).join("") || `<tr><td class="px-3 py-2 text-sm" colspan="7">Không có dữ liệu.</td></tr>`;
+}
+
+exportExcelBtn.addEventListener("click", ()=>{
+  const cur = getCurrent(); const users = getUsers(); const me = users[cur];
+  if(!me || (me.role !== "teacher" && me.role !== "admin")) return alert("Không có quyền xuất Excel.");
+  const code = resultsFilterCode.value; if(!code) return alert("Chọn mã đề để xuất.");
+  const quizzes = getQuizzes();
+  if(me.role === "teacher" && quizzes[code].createdBy !== cur) return alert("Bạn chỉ được xuất đề mình tạo.");
+  const rows = [];
+  Object.keys(users).forEach(u=>{
+    const hist = users[u].history || [];
+    hist.forEach(h=>{ if(h.code === code) rows.push({ "Học sinh": u, "Mã đề": h.code, "Tiêu đề": h.title, "Điểm (%)": h.score, "Đúng": h.correct, "Tổng": h.total, "Thời gian": formatISO(h.time) }); });
+  });
+  if(rows.length === 0) return alert("Không có kết quả cho mã đề này.");
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `Ketqua_${code}`);
+  XLSX.writeFile(wb, `ketqua_${code}.xlsx`);
+});
+
+/* ---------------- Admin export: users/quizzes/exams ---------------- */
+$("#btn-export-users").addEventListener("click", ()=>{
+  const users = getUsers(); const rows = Object.keys(users).map(u=>({ username: u, password: users[u].password, email: users[u].email, role: users[u].role, status: users[u].status, createdAt: formatISO(users[u].createdAt) }));
+  if(rows.length===0) return alert("No users");
+  const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Users"); XLSX.writeFile(wb, "users_list.xlsx");
+});
+$("#btn-export-quizzes").addEventListener("click", ()=>{
+  const quizzes = getQuizzes(); const rows = Object.keys(quizzes).map(c=>({ code:c, title:quizzes[c].title, createdBy:quizzes[c].createdBy, createdAt: formatISO(quizzes[c].createdAt), questions: quizzes[c].questions.length, timeMin:quizzes[c].timeMin, visible:quizzes[c].visible }));
+  if(rows.length===0) return alert("No quizzes");
+  const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Quizzes"); XLSX.writeFile(wb, "quizzes_list.xlsx");
+});
+$("#btn-export-exams").addEventListener("click", ()=>{
+  const exs = getExams(); const rows = exs.map(e=>({ id:e.id, quizCode:e.quizCode, quizTitle: getQuizzes()[e.quizCode]?.title || "", start: formatISO(e.startISO), end: formatISO(e.endISO), createdBy:e.createdBy, createdAt: formatISO(e.createdAt) }));
+  if(rows.length===0) return alert("No exams");
+  const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Exams"); XLSX.writeFile(wb, "exams_list.xlsx");
+});
+
+/* ---------------- Admin area actions (top nav) ---------------- */
+btnSwitchMaker.addEventListener("click", ()=>{ hideAllMain(); topActions.classList.remove("hidden"); makerArea.classList.remove("hidden"); });
+btnSwitchTaker.addEventListener("click", ()=>{ hideAllMain(); topActions.classList.remove("hidden"); takerArea.classList.remove("hidden"); renderExamList(); });
+btnSwitchResults.addEventListener("click", ()=>{ hideAllMain(); topActions.classList.remove("hidden"); resultsArea.classList.remove("hidden"); renderResults(); });
+btnUserMgmt.addEventListener("click", ()=>{ hideAllMain(); topActions.classList.remove("hidden"); adminArea.classList.remove("hidden"); renderAdminAll(); });
+btnQuizMgmt.addEventListener("click", ()=>{ hideAllMain(); topActions.classList.remove("hidden"); makerArea.classList.remove("hidden"); renderMakerList(); });
+btnExamMgmt.addEventListener("click", ()=>{ hideAllMain(); topActions.classList.remove("hidden"); adminArea.classList.remove("hidden"); renderAdminAll(); });
+btnLogout.addEventListener("click", ()=>{ if(confirm("Đăng xuất?")){ setCurrent(null); location.href = location.href.split('#')[0]; location.reload(); } });
+
+/* ---------------- Start app view for user ---------------- */
+function showAppFor(user){
+  hideAllMain();
+  topActions.classList.remove("hidden");
+  quizInfo.classList.remove("hidden");
+  topUsername.textContent = user; avatar.textContent = (user[0]||"U").toUpperCase();
+  const users = getUsers(); const me = users[user];
+  topRole.textContent = me.role==="admin" ? "Admin" : me.role==="teacher" ? "Giáo viên" : "Học sinh";
+  // show/hide top buttons
+  btnSwitchMaker.classList.add("hidden"); btnUserMgmt.classList.add("hidden"); btnQuizMgmt.classList.add("hidden"); btnExamMgmt.classList.add("hidden"); btnExportUsers.classList.add("hidden"); btnExportQuizzes.classList.add("hidden"); btnExportExams.classList.add("hidden");
+  if(me.role === "admin"){
+    btnUserMgmt.classList.remove("hidden"); btnQuizMgmt.classList.remove("hidden"); btnExamMgmt.classList.remove("hidden"); btnSwitchMaker.classList.remove("hidden");
+    btnExportUsers.classList.remove("hidden"); btnExportQuizzes.classList.remove("hidden"); btnExportExams.classList.remove("hidden");
+    btnSwitchTaker.classList.remove("hidden"); btnSwitchResults.classList.remove("hidden");
+    renderAdminAll();
+    btnUserMgmt.click();
+  } else if(me.role === "teacher"){
+    if(me.status !== "approved"){ alert("Tài khoản giáo viên chưa được Admin duyệt."); setCurrent(null); showAuth(); return; }
+    btnSwitchMaker.classList.remove("hidden"); btnSwitchResults.classList.remove("hidden"); btnSwitchTaker.classList.remove("hidden"); btnQuizMgmt.classList.remove("hidden");
+    btnSwitchMaker.click();
+  } else {
+    btnSwitchTaker.classList.remove("hidden"); btnSwitchResults.classList.remove("hidden");
+    btnSwitchTaker.click();
+  }
+  updateQuizInfoUI();
+}
+
+/* ---------------- Taker start (open new tab via hash handled earlier) ---------------- */
+takerStartBtn.addEventListener("click", ()=>{
+  const code = takerCodeInput.value.trim().toUpperCase();
+  if(!code){ alert("Nhập mã đề."); return; }
+  const quizzes = getQuizzes(); const q = quizzes[code];
+  if(!q){ alert("Mã đề không tồn tại."); return; }
+  const ex = findActiveExamFor(code);
+  const cur = getCurrent(), users=getUsers(), role = cur ? users[cur].role : null;
+  if(!ex && !q.visible && role !== "teacher" && role !== "admin"){ alert("Đề không công khai và không có kỳ thi."); return; }
+  const exid = ex ? ex.id : "";
+  window.open(location.href.split('#')[0] + `#take:${code}:${exid}`, "_blank");
+});
+
+/* ---------------- View quiz/exam pages (hash-based) ---------------- */
+function bootViewFromHash(){
+  const hash = location.hash || "";
+  if(hash.startsWith("#viewQuiz:")){
+    const code = hash.replace("#viewQuiz:","");
+    renderViewQuizPage(code);
+    return true;
+  }
+  if(hash.startsWith("#viewExam:")){
+    const id = hash.replace("#viewExam:","");
+    renderViewExamPage(id);
+    return true;
+  }
+  return false;
+}
+
+/* Render quiz detail page (separate view) */
+function renderViewQuizPage(code){
+  const quizzes = getQuizzes();
+  const q = quizzes[code];
+  if(!q){ document.body.innerHTML = `<div style="font-family:Arial;padding:20px">Không tìm thấy mã đề: ${escapeHtml(code)} <br><a href="${location.href.split('#')[0]}">Quay lại</a></div>`; return; }
+  // build page with details and export button
+  const rows = q.questions.map((item, idx)=>({
+    no: idx+1, question: item.q, A: item.A, B: item.B, C: item.C, D: item.D, correct: item.correct
+  }));
+  const headerHtml = `
+    <div style="font-family:Inter,Arial;max-width:980px;margin:18px auto;padding:22px;background:#fff;border-radius:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h1 style="font-size:20px;margin:0">${escapeHtml(q.title)}</h1>
+          <div style="color:#555;font-size:13px;margin-top:6px">Mã đề: <strong>${q.code}</strong> • ${q.questions.length} câu • Thời lượng: ${q.timeMin} phút</div>
+        </div>
+        <div>
+          <button id="export-quiz-btn" style="background:#f59e0b;color:white;border:none;padding:8px 12px;border-radius:6px">Xuất Excel</button>
+          <a href="${location.href.split('#')[0]}" style="margin-left:8px" class="inline-block px-3 py-2 border rounded">Quay lại</a>
+        </div>
+      </div>
+      <hr style="margin:12px 0; border-color:#eee"/>
+      <div id="quiz-questions"></div>
+    </div>
+  `;
+  document.body.innerHTML = headerHtml;
+  const container = $("#quiz-questions");
+  container.innerHTML = rows.map(r=>`
+    <div style="padding:10px;border:1px solid #f0f0f0;border-radius:8px;margin-bottom:8px">
+      <div style="font-weight:600">Câu ${r.no}: ${escapeHtml(r.question)}</div>
+      <div style="margin-top:6px">
+        <div>A. ${escapeHtml(r.A)} ${r.correct==='A'? '<strong style="color:green">(Đúng)</strong>': ''}</div>
+        <div>B. ${escapeHtml(r.B)} ${r.correct==='B'? '<strong style="color:green">(Đúng)</strong>': ''}</div>
+        <div>C. ${escapeHtml(r.C)} ${r.correct==='C'? '<strong style="color:green">(Đúng)</strong>': ''}</div>
+        <div>D. ${escapeHtml(r.D)} ${r.correct==='D'? '<strong style="color:green">(Đúng)</strong>': ''}</div>
+      </div>
+    </div>
+  `).join("");
+  // export handler
+  $("#export-quiz-btn").addEventListener("click", ()=>{
+    const xrows = [];
+    xrows.push({ "Mã đề": q.code, "Tiêu đề": q.title, "Thời lượng (phút)": q.timeMin, "Số câu": q.questions.length, "Tạo bởi": q.createdBy, "Ngày tạo": formatISO(q.createdAt) });
+    xrows.push({});
+    xrows.push({ "No": "STT", "Câu hỏi": "Nội dung", "A": "A", "B": "B", "C": "C", "D": "D", "Đáp án đúng": "Đáp án đúng" });
+    q.questions.forEach((it, idx)=>{
+      xrows.push({ No: idx+1, "Câu hỏi": it.q, A: it.A, B: it.B, C: it.C, D: it.D, "Đáp án đúng": it.correct });
+    });
+    const ws = XLSX.utils.json_to_sheet(xrows, { skipHeader:true });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, `De_${q.code}`);
+    XLSX.writeFile(wb, `De_${q.code}.xlsx`);
+  });
+}
+
+/* Render exam detail page */
+function renderViewExamPage(id){
+  const exs = getExams();
+  const ex = exs.find(x=> x.id === id);
+  if(!ex){ document.body.innerHTML = `<div style="font-family:Arial;padding:20px">Không tìm thấy kỳ thi: ${escapeHtml(id)} <br><a href="${location.href.split('#')[0]}">Quay lại</a></div>`; return; }
+  const quizzes = getQuizzes();
+  const q = quizzes[ex.quizCode];
+  const headerHtml = `
+    <div style="font-family:Inter,Arial;max-width:980px;margin:18px auto;padding:22px;background:#fff;border-radius:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h1 style="font-size:20px;margin:0">Kỳ thi: ${escapeHtml(ex.quizCode)} — ${escapeHtml(q?.title || '')}</h1>
+          <div style="color:#555;font-size:13px;margin-top:6px">Bắt đầu: ${formatISO(ex.startISO)} • Kết thúc: ${formatISO(ex.endISO)}</div>
+        </div>
+        <div>
+          <button id="export-exam-btn" style="background:#f59e0b;color:white;border:none;padding:8px 12px;border-radius:6px">Xuất Excel (Kỳ thi)</button>
+          <a href="${location.href.split('#')[0]}" style="margin-left:8px" class="inline-block px-3 py-2 border rounded">Quay lại</a>
+        </div>
+      </div>
+      <hr style="margin:12px 0; border-color:#eee"/>
+      <div>
+        <h4 class="font-semibold">Thông tin đề kèm kỳ thi</h4>
+        <div class="text-sm text-gray-700">Mã đề: ${escapeHtml(ex.quizCode)}</div>
+        <div class="text-sm text-gray-700">Tiêu đề đề: ${escapeHtml(q?.title||'')}</div>
+        <div class="text-sm text-gray-700">Số câu: ${q?.questions.length || 0}</div>
+      </div>
+    </div>
+  `;
+  document.body.innerHTML = headerHtml;
+  // export handler
+  $("#export-exam-btn").addEventListener("click", ()=>{
+    const rows = [];
+    rows.push({ "Mã kỳ thi": ex.id, "Mã đề": ex.quizCode, "Tiêu đề đề": q?.title || "", "Bắt đầu": formatISO(ex.startISO), "Kết thúc": formatISO(ex.endISO), "Tạo bởi": ex.createdBy, "Ngày tạo": formatISO(ex.createdAt) });
+    rows.push({});
+    rows.push({ "Mã đề": "Mã đề", "Tiêu đề": "Tiêu đề", "Số câu": "Số câu", "Thời gian (phút)": "Thời gian (phút)" });
+    rows.push({ "Mã đề": ex.quizCode, "Tiêu đề": q?.title || "", "Số câu": q?.questions.length || 0, "Thời gian (phút)": q?.timeMin || "" });
+    const ws = XLSX.utils.json_to_sheet(rows, { skipHeader:true });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, `KyThi_${ex.id}`);
+    XLSX.writeFile(wb, `KyThi_${ex.id}.xlsx`);
+  });
+}
+
+/* ---------------- Boot view from hash if needed ---------------- */
+if(bootTakeFromHash()){ /* standalone take launched; no SPA init further */ }
+else if(bootViewFromHash()){ /* view page (quiz or exam) loaded; no SPA init further */ }
+else {
+  /* ---------------- INIT SPA ---------------- */
+  function initUI(){
+    const cur = getCurrent();
+    if(cur && getUsers()[cur]){ showAppFor(cur); } else { showAuth(); }
+    updateQuizInfoUI();
+  }
+  initUI();
+}
+
+/* ---------------- Results UI events ---------------- */
+resultsFilterCode.addEventListener("change", renderResults);
+closeResults.addEventListener("click", ()=>{ $("#results-area").classList.add("hidden"); });
+
+/* ---------------- Admin render & init (if SPA) ---------------- */
+if(!location.hash.startsWith("#take:") && !location.hash.startsWith("#viewQuiz:") && !location.hash.startsWith("#viewExam:")){
+  // ensure some initial data persists
+  if(!localStorage.getItem(LS_USERS)) setUsers(getUsers());
+  if(!localStorage.getItem(LS_QUIZZES)) setQuizzes(getQuizzes());
+  if(!localStorage.getItem(LS_EXAMS)) setExams(getExams());
+}
+
+/* ---------------- Helper rendering on SPA load ---------------- */
+function initSPAHelpers(){
+  // wire top-level buttons after SPA init
+  // user/teacher/admin navigation already wired earlier
+}
+initSPAHelpers();
+
+</script>
+</body>
+</html>
